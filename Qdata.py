@@ -2,6 +2,10 @@ import ChemData as CD
 import sys
 import numpy as np
 
+"""
+Parser for iterating through Q-Chem files and collecting all relevant information of interest
+"""
+
 #Single point/general job parse keys
 finish_key ='Thank you very much for using Q-Chem.  Have a nice day.'
 sp_key ='Total energy in the final basis set'
