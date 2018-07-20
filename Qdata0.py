@@ -1,7 +1,10 @@
 import ChemData as CD
 import sys
 import numpy as np
-import os
+
+"""
+Parser for iterating through Q-Chem files and collecting all relevant information of interest
+"""
 
 #Single point/general job parse keys
 finish_key ='Thank you very much for using Q-Chem.  Have a nice day.'
@@ -27,7 +30,6 @@ orbital_key = "Orbital Energies (a.u.)"
 
 #Parsing class for Q-Chem output files
 class Qdata(object):
-
   def __init__(self):
     self.chelpg_flag = False
     #There was a point where I didn't include all of these, but hey, why not? It runs fast enough
@@ -47,19 +49,18 @@ class Qdata(object):
                        #orbital_key : self.orbitals, \ #Currently breaks parsing for all things after the orbitals
                        }
 
-  #main workhorse; iterate through file and grab stuff when it hits a key phrase
+#main workhorse; iterate through file and grab stuff when it hits a key phrase
   def qParse(self, qchem_outfile):
-    self.filename = os.path.basename(qchem_outfile)
     with open(qchem_outfile, 'r') as f:
       for line in f:
         #if match with parse list, call function
-
+        
         self.trash_key_bin = [] #Any keys to be removed will be removed after iterating over the dictionary
         for item in self.parse_base.keys():
           if item in line:
             func_point = self.parse_base[item]
             func_point(f,line)
-
+            
         for trash_key in self.trash_key_bin:
             del self.parse_base[trash_key]
             print("Function parse routine complete. Removing key: "+trash_key)
@@ -129,7 +130,7 @@ class Qdata(object):
 
   def solvEnergy(self,infile,line):
     spline = line.split()
-    self.solvE = float(spline[-2])
+    self.E = float(spline[-2])
 
   def entropy(self, infile, line):
     spline = line.split()
@@ -169,7 +170,7 @@ class Qdata(object):
         break
       grab_list.append(line.strip())
     self.coordArr(grab_list)
-
+  
   def jobtype(self, infile, line):
     spline = line.split()
     self.job = spline[-1]
@@ -187,7 +188,7 @@ class Qdata(object):
   def dist(self,atom_ind1,atom_ind2):
     return np.linalg.norm(self.coord[atom_ind1,:] - self.coord[atom_ind2,:])
 
-
+    
 
 #short testing module for reading a frequency calculation
 if __name__ == "__main__":
@@ -200,8 +201,34 @@ if __name__ == "__main__":
 #  print(len(qdata.alpha_occ))
 #  print(len(qdata.beta_occ))
 
-  print(qdata.atoms)
-  #print(qdata.chelpg)
-  print(qdata.filename)
-  print(qdata.E)
+  print(qdata.chelpg)
 #  print(qdata.spin)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
