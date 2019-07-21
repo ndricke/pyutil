@@ -1,7 +1,7 @@
+#!/usr/bin/env python2.7
 import ChemData as CD
 import sys
 import numpy as np
-import os
 
 #Single point/general job parse keys
 finish_key ='Thank you very much for using Q-Chem.  Have a nice day.'
@@ -23,11 +23,11 @@ job_key = 'jobtype'
 chmul_key = '$molecule'
 Mulliken_key = 'Ground-State Mulliken Net Atomic Charges'
 Chelpg_key = 'Ground-State ChElPG Net Atomic Charges'
+optgeo_key = '**  OPTIMIZATION CONVERGED  **'
 orbital_key = "Orbital Energies (a.u.)"
 
 #Parsing class for Q-Chem output files
 class Qdata(object):
-
   def __init__(self):
     self.chelpg_flag = False
     #There was a point where I didn't include all of these, but hey, why not? It runs fast enough
@@ -44,22 +44,22 @@ class Qdata(object):
                        job_key:self.jobtype, \
                        Mulliken_key : self.Mulliken, \
                        Chelpg_key : self.Chelpg, \
-                       #orbital_key : self.orbitals, \ #Currently breaks parsing for all things after the orbitals
-                       }
+                       optgeo_key : self.optCoordGrab, \
+                       orbital_key : self.orbitals #This breaks the parsing routine for things after the orbitals
+                        }
 
-  #main workhorse; iterate through file and grab stuff when it hits a key phrase
+#main workhorse; iterate through file and grab stuff when it hits a key phrase
   def qParse(self, qchem_outfile):
-    self.filename = os.path.basename(qchem_outfile)
     with open(qchem_outfile, 'r') as f:
       for line in f:
         #if match with parse list, call function
-
+        
         self.trash_key_bin = [] #Any keys to be removed will be removed after iterating over the dictionary
         for item in self.parse_base.keys():
           if item in line:
             func_point = self.parse_base[item]
             func_point(f,line)
-
+            
         for trash_key in self.trash_key_bin:
             del self.parse_base[trash_key]
             print("Function parse routine complete. Removing key: "+trash_key)
@@ -117,11 +117,11 @@ class Qdata(object):
   def orbitals(self, infile, line):
     alpha_key = "Alpha MOs"
     beta_key = "Beta MOs"
-#    for line in infile:
-#      if alpha_key in line:
-#        self.alpha_occ, self.alpha_vir = CD.moGrab(infile, line)
-#      if beta_key in line:
-#        self.beta_occ, self.beta_vir = CD.moGrab(infile, line)
+    for line in infile:
+      if alpha_key in line:
+        self.alpha_occ, self.alpha_vir = CD.moGrab(infile, line)
+      if beta_key in line:
+        self.beta_occ, self.beta_vir = CD.moGrab(infile, line)
 
   def spEnergy(self, infile, line):
     spline = line.split()
@@ -129,7 +129,7 @@ class Qdata(object):
 
   def solvEnergy(self,infile,line):
     spline = line.split()
-    self.solvE = float(spline[-2])
+    self.E = float(spline[-2])
 
   def entropy(self, infile, line):
     spline = line.split()
@@ -168,26 +168,51 @@ class Qdata(object):
       if key_end in line:
         break
       grab_list.append(line.strip())
-    self.coordArr(grab_list)
-
+    self.atoms, self.coord = self.coordArr(grab_list)
+  
   def jobtype(self, infile, line):
     spline = line.split()
     self.job = spline[-1]
 
+  def optCoordGrab(self, infile, line):
+    key_end = "Z-matrix Print:"
+    next(infile); next(infile); next(infile); next(infile);
+    grab_list = []
+    for line in infile:
+        if key_end in line:
+            break
+        grab_list.append(line.strip())
+    print(grab_list)
+    grab_list.pop(-1)
+
+    self.opt_atoms, self.opt_coord = self.coordArr(grab_list)
+
+
   def coordArr(self,coord_list):
     if self.ftype == 'xyz': split_at = 1
     elif self.ftype == 'out': split_at = 2
-    self.coord = np.zeros((len(coord_list),3))
-    self.atoms = []
+    coord = np.zeros((len(coord_list),3))
+    atoms = []
     for i, line in enumerate(coord_list):
       spline = line.split()
-      self.atoms.append(spline[split_at-1])
-      self.coord[i,:] = [float(j) for j in spline[split_at:]]
+      atoms.append(spline[split_at-1])
+      coord[i,:] = [float(j) for j in spline[split_at:]]
+    return atoms, coord
 
   def dist(self,atom_ind1,atom_ind2):
     return np.linalg.norm(self.coord[atom_ind1,:] - self.coord[atom_ind2,:])
 
+  @staticmethod
+  def writeXYZ(filename, atom_list, coord_arr, comment=" "):
+    with open(filename, 'w') as f:
+      f.write(str(len(atom_list))+'\n')
+      f.write(comment+'\n')
+      for i, item in enumerate(atom_list):
+        f.write(item + '   ' + '   '.join([str(num) for num in coord_arr[i,:]])+'\n')
 
+    
+
+    
 
 #short testing module for reading a frequency calculation
 if __name__ == "__main__":
@@ -200,8 +225,40 @@ if __name__ == "__main__":
 #  print(len(qdata.alpha_occ))
 #  print(len(qdata.beta_occ))
 
-  print(qdata.atoms)
-  #print(qdata.chelpg)
-  print(qdata.filename)
-  print(qdata.E)
-#  print(qdata.spin)
+#  print(qdata.atoms)
+#  print(qdata.chelpg)
+  
+#  Fe_charge = qdata.chelpg[qdata.atoms.index('Fe')]
+#  print(Fe_charge)
+#  print(qdata.spin)  
+
+  print(qdata.opt_coord)
+  qdata.writeXYZ('test.xyz', qdata.opt_atoms, qdata.opt_coord)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

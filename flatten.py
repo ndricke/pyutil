@@ -21,7 +21,7 @@ plt.rcParams['font.serif'] = 'Computer Modern Roman'
 plt.rcParams['legend.numpoints'] = 1
 
 arrayify = lambda x: numpy.array(map(float,x))
-fname = sys.argv[1]
+fname = sys.argv[1] # the file should be a gaussian cube file, ideally for a molecule that is 2D
 f = open(fname)
 f.readline()
 f.readline()

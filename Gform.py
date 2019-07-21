@@ -28,19 +28,29 @@ class Gform(object):
 #Parses qchem output files and loads a Qdata instance with appropriate data
   def dG(self, infile, fq_file=None, pcm_file=None):
     print("Performing PCET Calc: ", infile)
-    qdat = Qdata.Qdata(infile)
-    if fq_file == None: qdat.load(infile)
-    else: qdat.load(fq_file)
+    qdat = Qdata.Qdata()
+    qdat.readFile(infile)
+    if fq_file != None: 
+        qdat_fq = Qdata.Qdata()
+        qdat_fq.readFile(fq_file)
+        qdat.H = qdata_fq.H
+        qdat.Hzpe = qdat_fq.Hzpe
+        qdat.Hvib = qdat_fq.Hvib
+        qdat.S = qdat_fq.S
+    else: print("No fq file?")
+    #else: qdat.load(fq_file)
     if qdat.H == None: raise ValueError("Couldn't find necessary thermo info")
-    if pcm_file == None: qdat.loadPCM(infile); print("No PCM file found, PCM infile?");
-    else: qdat.loadPCM(pcm_file); print("Found independent PCM file");
+    if pcm_file != None: 
+        qdat_solv = Qdata.Qdata()
+        qdat_solv.readFile(pcm_file)
+        qdat.E = qdat_solv.E
     return self.calcG(qdat) #overwrites qdat.E with E including solv effects
 
   def calcG(self, qdat):
     Eatoms, dHfatoms, ddH_ss, S_ss = self.thermSS(qdat)
     ddH = qdat.Hvib*self.vib_scale - qdat.Hzpe*self.vib_scale + self.Htrpv
-#    dHAtomization = -1.0*qdat.E*self.Ht2kC + Eatoms*self.Ht2kC - qdat.Hzpe*self.vib_scale
-    dHAtomization = -1.0*qdat.Esolv*self.Ht2kC + Eatoms*self.Ht2kC - qdat.Hzpe*self.vib_scale
+    dHAtomization = -1.0*qdat.E*self.Ht2kC + Eatoms*self.Ht2kC - qdat.Hzpe*self.vib_scale #solvation energy includes total E
+#    dHAtomization = -1.0*qdat.Esolv*self.Ht2kC + Eatoms*self.Ht2kC - qdat.Hzpe*self.vib_scale
     dHf0 = dHfatoms - dHAtomization
     dHf298 = dHf0 + ddH - ddH_ss
     dGfg = dHf298 - self.T*(qdat.S - S_ss)
@@ -49,26 +59,29 @@ class Gform(object):
     print('dHf0: ', dHf0)
     print('ddH_ss: ', ddH_ss)
     print('S_ss: ', S_ss)
-    print('E: ', qdat.Esolv)
+    print('E: ', qdat.E)
     print('H_zpe: ', qdat.Hzpe)
     print('ddH: ',ddH)
     print('S: ',qdat.S)
     print('dHatomization: ',dHAtomization)
     dGfaq = dGfg + 1.89 #+ qdat.Gpcm #qdat.loadPCM overwrites qdat.E w/ E including solv effects
-    return [qdat.Esolv,dHf0,ddH-ddH_ss,qdat.Hzpe,qdat.S-S_ss,dGfaq]
+    return [qdat.E,dHf0,ddH-ddH_ss,qdat.Hzpe,qdat.S-S_ss,dGfaq]
 
 #Main workhorse; iterate through target directory and scrape out thermodynamic information
   def batchDG(self):
     for filename in os.listdir(self.indir):
      if filename.split('.')[-1] == 'out': #only work with output files, ignore everything else
       fspl = filename.split('_')
-      job = fspl[-2] #-1 is spin-charge tag, jobtype needs to be second to last
+      job = fspl[1] #0 is the name, 1 is the job, -1 is the ChMult tag
+
       if job == 'sfq': #sfq is a solvated frequency calculation; this has all the info we need
         therm_list = self.dG(self.indir+"/"+filename,pcm_file=(self.indir+"/"+filename))
       elif job in ['opfqSo', 'sopfqSo', 'optspfq']: #opt-freq-solventSP 
         therm_list = self.dG(self.indir+'/'+filename)
+
       #freq run separately from solvation; look for corresponding PCM file
       elif ('freq' in job or 'fq' in job):
+        print("Super freq!")
         chem_id = self.chemID(filename)
         for pcm_file in os.listdir(self.indir):
           #if ('spSo' in pcm_file or 'Sm8' in pcm_file or 'Sm12' in pcm_file or 'sop' in pcm_file):
@@ -76,7 +89,10 @@ class Gform(object):
             pcm_id = self.chemID(pcm_file)
             if chem_id == pcm_id:
               therm_list = self.dG(self.indir+"/"+filename,pcm_file=(self.indir+"/"+pcm_file))
-      else: continue #whatever the file is, it doesn't follow a recognizeable naming structure
+      else: 
+        print("Just not sure where this job is going...")
+        continue #whatever the file is, it doesn't follow a recognizeable naming structure
+
       print(filename, therm_list[-1]) #last item in therm_list is dGfaq, the important quantity
       self.Gf_df.loc[len(self.Gf_df)] = [filename]+therm_list
       print()
