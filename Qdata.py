@@ -1,4 +1,3 @@
-#!/usr/bin/env python2.7
 import ChemData as CD
 import sys
 import numpy as np
@@ -45,11 +44,12 @@ class Qdata(object):
                        Mulliken_key : self.Mulliken, \
                        Chelpg_key : self.Chelpg, \
                        optgeo_key : self.optCoordGrab, \
-                       orbital_key : self.orbitals #This breaks the parsing routine for things after the orbitals
+                       #orbital_key : self.orbitals #This breaks the parsing routine for things after the orbitals
                         }
 
 #main workhorse; iterate through file and grab stuff when it hits a key phrase
   def qParse(self, qchem_outfile):
+    print("Beginning to parse...")
     with open(qchem_outfile, 'r') as f:
       for line in f:
         #if match with parse list, call function
@@ -137,6 +137,7 @@ class Qdata(object):
     #del self.parse_base[entropy_key]
 
   def enthalpy(self, infile, line):
+    print("Found the enthalpy! ", line)
     spline = line.split()
     self.H = float(spline[2])
     #del self.parse_base[enthalpy_key]

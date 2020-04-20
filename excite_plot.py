@@ -9,7 +9,8 @@ import matplotlib.pyplot as plt
 font = {'size':22}
 mpl.rc('font',**font)
 
-#infile = sys.argv[1]
+infile = sys.argv[1]
+
 
 def loadExciteDf(infile):
     strength_list = []
@@ -25,6 +26,7 @@ def loadExciteDf(infile):
     df = pd.DataFrame(excit_dict)
     return df
 
+
 def gaussian(x, mu, norm, sig2):
     return norm/((2.*np.pi*sig2)**0.5)*np.exp(-1.*(x-mu)**2/(2*sig2))
 
@@ -33,30 +35,20 @@ hc = 1240.
 n_grid = 2500
 sig2 = 20.
 
-nan_df = loadExciteDf('nan_tddft_a0m1_states.txt')
-nanFeCl_df = loadExciteDf('nanFeCl_tddft_a0m4_states.txt')
+df = loadExciteDf(infile)
+df = df.assign(E_nm=hc/df['E_eV'])
+df = df.sort_values(by=['Osc_Str'])
+print(df)
 
-nan_df = nan_df.assign(E_nm=hc/nan_df['E_eV'])
-nanFeCl_df = nanFeCl_df.assign(E_nm=hc/nanFeCl_df['E_eV'])
-
-nan_df = nan_df.sort_values(by=['Osc_Str'])
-nanFeCl_df = nanFeCl_df.sort_values(by=['Osc_Str'])
-
-print(nan_df)
-print(nanFeCl_df)
-
-x_arr = np.linspace(150,500,n_grid)
+x_arr = np.linspace(350,800,n_grid)
 spectrum = np.zeros(n_grid)
 Fe_spectrum = np.zeros(n_grid)
 
-for index, row in nan_df.iterrows():
+for index, row in df.iterrows():
     spectrum += gaussian(x_arr, row['E_nm'], row['Osc_Str']**2, sig2)
 
-for index, row in nanFeCl_df.iterrows():
-    Fe_spectrum += gaussian(x_arr, row['E_nm'], 22.*row['Osc_Str']**2, sig2)
 
-plt.plot(x_arr, spectrum, label='Phencir')
-plt.plot(x_arr, Fe_spectrum, label='PhencirFe')
+plt.plot(x_arr, spectrum, label='PhencirFe-O-PhencirFe')
 plt.ylabel('Absorbance')
 plt.xlabel('Wavelength (nm)')
 plt.legend()

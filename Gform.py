@@ -6,6 +6,14 @@ import sys
 import os
 from collections import Counter
 
+"""
+Calculate dG_formation of molecule using a solvated calculation at optimum geometry and a frequency calculation
+Assumes Q-Chem output file format
+
+When calling this script directly:
+Input 1: directory containing all the necessary Q-Chem jobs
+Input 2: name of output csv file
+"""
 
 class Gform(object):
   def __init__(self, in_directory, outfile_name, therm_datafile):
@@ -26,19 +34,14 @@ class Gform(object):
     self.SSmPa = {'H':0.5,'C':1.0,'N':0.5,'O':0.5,'F':0.5,'Ni':1.0,'S':1.0,'Fe':1.0}
 
 #Parses qchem output files and loads a Qdata instance with appropriate data
-  def dG(self, infile, fq_file=None, pcm_file=None):
-    print("Performing PCET Calc: ", infile)
+  def dG(self, fq_file=None, pcm_file=None):
+    print("Performing PCET Calc: ", fq_file, pcm_file)
     qdat = Qdata.Qdata()
-    qdat.readFile(infile)
-    if fq_file != None: 
-        qdat_fq = Qdata.Qdata()
-        qdat_fq.readFile(fq_file)
-        qdat.H = qdata_fq.H
-        qdat.Hzpe = qdat_fq.Hzpe
-        qdat.Hvib = qdat_fq.Hvib
-        qdat.S = qdat_fq.S
-    else: print("No fq file?")
-    #else: qdat.load(fq_file)
+    qdat.readFile(fq_file)
+    #qdat.H = qdat_fq.H
+    #qdat.Hzpe = qdat_fq.Hzpe
+    #qdat.Hvib = qdat_fq.Hvib
+    #qdat.S = qdat_fq.S
     if qdat.H == None: raise ValueError("Couldn't find necessary thermo info")
     if pcm_file != None: 
         qdat_solv = Qdata.Qdata()
@@ -70,32 +73,30 @@ class Gform(object):
 #Main workhorse; iterate through target directory and scrape out thermodynamic information
   def batchDG(self):
     for filename in os.listdir(self.indir):
-     if filename.split('.')[-1] == 'out': #only work with output files, ignore everything else
-      fspl = filename.split('_')
-      job = fspl[1] #0 is the name, 1 is the job, -1 is the ChMult tag
-
-      if job == 'sfq': #sfq is a solvated frequency calculation; this has all the info we need
-        therm_list = self.dG(self.indir+"/"+filename,pcm_file=(self.indir+"/"+filename))
-      elif job in ['opfqSo', 'sopfqSo', 'optspfq']: #opt-freq-solventSP 
-        therm_list = self.dG(self.indir+'/'+filename)
-
-      #freq run separately from solvation; look for corresponding PCM file
-      elif ('freq' in job or 'fq' in job):
-        print("Super freq!")
+      if filename.split('.')[-1] == 'out' and 'fq' in filename: #ignore all non-fq output files
+        job = filename.split('_')[1]
+  
+        #if job == 'sfq': #sfq is a solvated frequency calculation; this has all the info we need
+        #  therm_list = self.dG(self.indir+"/"+filename,pcm_file=(self.indir+"/"+filename))
+        #elif job in ['opfqSo', 'sopfqSo', 'optspfq']: #opt-freq-solventSP 
+        #  therm_list = self.dG(self.indir+'/'+filename)
+  
+        #freq run separately from solvation; look for corresponding PCM file
         chem_id = self.chemID(filename)
         for pcm_file in os.listdir(self.indir):
-          #if ('spSo' in pcm_file or 'Sm8' in pcm_file or 'Sm12' in pcm_file or 'sop' in pcm_file):
           if ('sp' or 'Sm8' or 'Sm12' or 'sop') in pcm_file :
             pcm_id = self.chemID(pcm_file)
             if chem_id == pcm_id:
-              therm_list = self.dG(self.indir+"/"+filename,pcm_file=(self.indir+"/"+pcm_file))
+              therm_list = self.dG(self.indir+"/"+filename, pcm_file=self.indir+"/"+pcm_file)
+              break
+
       else: 
         print("Just not sure where this job is going...")
         continue #whatever the file is, it doesn't follow a recognizeable naming structure
 
       print(filename, therm_list[-1]) #last item in therm_list is dGfaq, the important quantity
       self.Gf_df.loc[len(self.Gf_df)] = [filename]+therm_list
-      print()
+    print()
     print(self.Gf_df)
     self.Gf_df.to_csv(self.outfile_name)
 
@@ -106,8 +107,13 @@ class Gform(object):
     splile = splile.split('_')
     return splile[0] + splile[-1]
 
-#calculates thermodynamic data for the steady state
   def thermSS(self, Qdata):
+    """
+    calculates thermodynamic data for the steady state
+    output units: 
+    Eatoms: Hartree 
+    dHfatoms, ddH_ss, S_ss: kCal/mol
+    """
     dHfatoms = 0.0
     S_ss = 0.0
     ddH_ss = 0.0
@@ -130,9 +136,9 @@ class Gform(object):
 if __name__ == "__main__":
   in_dir = sys.argv[1] #directory where all of the jobs are stored
   out_df_name = sys.argv[2] #outputs pandas dataframe to csv
-  tdat = os.path.join(sys.path[0],"tdat_tpssh.csv")
-#  tdat = os.path.join(sys.path[0],"tdat_pbe.csv")
-#  tdat = os.path.join(sys.path[0],"tdat.csv")
+  #tdat = os.path.join(sys.path[0],"tdat_tpssh.csv")
+  #tdat = os.path.join(sys.path[0],"tdat_pbe.csv")
+  tdat = os.path.join(sys.path[0],"tdat_b3lyp.csv")
   gform = Gform(in_dir,out_df_name,tdat)
   gform.batchDG() 
 
